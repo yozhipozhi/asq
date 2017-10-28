@@ -1,9 +1,11 @@
-#ifndef INCLUDE_ASQ_H_
-#define INCLUDE_ASQ_H_
+#ifndef INCLUDE_ASQ_ASQ_H_
+#define INCLUDE_ASQ_ASQ_H_
 
 namespace asq {
 
 using uint8 = unsigned char;
+
+
 
 class uint8_array {
   public:
@@ -39,6 +41,15 @@ class uint8_array {
 
 
 class Sequencer {
+public:
+  virtual bool IsRunning() const = 0;
+  // Should reset if stopped.
+  virtual void Start() = 0;
+  virtual void NextStep()  = 0;
+};
+
+
+class ActionSequencer : public Sequencer {
   public:
     typedef uint8 index_t;
     typedef uint8 step_t;
@@ -51,7 +62,7 @@ class Sequencer {
     static const index_t kIndexStopped = 255;
     static const uint8 kActionDelay = 255;
 
-    Sequencer(index_t sequence_size, const Entry* sequence, bool should_loop)
+    ActionSequencer(index_t sequence_size, const Entry* sequence, bool should_loop)
       : sequence_size_(sequence_size),
         sequence_(sequence),
         should_loop_(should_loop),
@@ -98,10 +109,10 @@ class Sequencer {
 };
 
 
-class AnalogOutputSequencer : public Sequencer {
+class AnalogOutputSequencer : public ActionSequencer {
   public:
     AnalogOutputSequencer(const uint8_array& output_pins, index_t sequence_size, const Entry* sequence, bool should_loop)
-      : Sequencer(sequence_size, sequence, should_loop),
+      : ActionSequencer(sequence_size, sequence, should_loop),
         output_pins_(output_pins) {
     }
 
@@ -117,11 +128,28 @@ class AnalogOutputSequencer : public Sequencer {
     const uint8_array output_pins_;
 };
 
-class NeoPixelSequencer : public Sequencer {
 
-};
+// class NeoPixelBounceSequencer : public Sequencer {
+//   public:
+//     NeoPixelBounceSequencer(Adafruit_NeoPixel& strip, const uint8_array& mask, const uint8_array& color_sequence)
+//        strip_(strip), mask(mask_), color_sequence_(color_sequence), position_(0), current_color_(0) {}
+//
+//     void NextStep() {
+//       if (position_ > 0) {
+//
+//       }
+//     }
+//
+//   private:
+//     Adafruit_NeoPixel& strip_;
+//     const uint8_array& mask_;
+//     const uint8_array& color_sequence_;
+//     size_t position_;
+//     size_t current_color_;
+//
+// };
 
 
 }  // namespace asq
 
-#endif INCLUDE_ASQ_H_
+#endif INCLUDE_ASQ_ASQ_H_
