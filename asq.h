@@ -1,93 +1,78 @@
 #ifndef INCLUDE_ASQ_ASQ_H_
 #define INCLUDE_ASQ_ASQ_H_
 
+#include <Arduino.h>
+
 namespace asq {
 
-using uint8 = unsigned char;
-
-
-
-class uint8_array {
+template <typename T>
+class array_t {
   public:
-    typedef unsigned char byte;
-
-    uint8_array(const uint8 data) : size_(1) {
-      data_ = new uint8[1];
-      data_[0] = data;
+    array_t(const T& data) {
+      size_ = 1;
+      data_ = &data;
     }
 
-    uint8_array(const size_t size, const uint8 data[]) {
+    array_t(const size_t size,  const T* data) {
       size_ = size;
-      data_ = new uint8[size_];
-      memcpy(data_, data, size_);
+      data_ = data;
     }
-
-    uint8_array(const uint8_array& other) {
-      size_ = other.size_;
-      data_ = new uint8[size_];
-      memcpy(data_, other.data_, size_);      
-    }
-
-    ~uint8_array() { delete data_; }
-
+     
     size_t size() const { return size_; }
 
-    const uint8& operator[](const size_t index) const { return data_[index]; }
+    const T& operator[](const size_t index) const { return data_[index]; }
     
   private:
     size_t size_;
-    uint8* data_;
+    const T* data_;
 };
+
+using uint8_array_t = array_t<uint8_t>;
+
+#define asq_make_const_array_t(Type_, Name_, Size_, ...) \
+    const Type_ Name_ ## __raw_array[Size_] = __VA_ARGS__; \
+    ::asq::array_t<Type_> Name_ (Size_, Name_ ## __raw_array);
 
 
 class Sequencer {
 public:
   virtual bool IsRunning() const = 0;
-  // Should reset if stopped.
-  virtual void Start() = 0;
+  virtual void Reset() = 0;
   virtual void NextStep()  = 0;
 };
 
 
+template <size_t ACTION_SIZE>
 class ActionSequencer : public Sequencer {
   public:
-    typedef uint8 index_t;
-    typedef uint8 step_t;
-
-    struct Entry {
-      step_t step_count;
-      uint8_array action;
+    struct Action {
+      uint8_t step_count;
+      uint8_t action[ACTION_SIZE];
     };
 
-    static const index_t kIndexStopped = 255;
-    static const uint8 kActionDelay = 255;
-
-    ActionSequencer(index_t sequence_size, const Entry* sequence, bool should_loop)
-      : sequence_size_(sequence_size),
-        sequence_(sequence),
+    ActionSequencer(const array_t<Action>& sequence,
+                    const size_t start_index = 0,
+                    const bool should_loop = true)
+      : sequence_(sequence),
         should_loop_(should_loop),
-        current_index_(kIndexStopped),
+        current_index_(start_index),
         current_step_(0) {}
 
-    bool IsRunning() const {
-      return current_index_ != kIndexStopped;
+    bool IsRunning() const override {
+      return current_index_ < sequence_.size();
     }
 
-    void Start() {
+    void Reset() override {
       current_index_ = 0;
+      current_step_ = 0;
     }
 
-    void NextStep() {
-      if (!IsRunning()) {
-        return;
-      }
-      if (current_index_ >= sequence_size_) {
+    void NextStep() override {
+      if (current_index_ >= sequence_.size()) {
         if (!should_loop_) {
-          current_index_ = kIndexStopped;
           return;
         } else {
-          current_index_ = 0;
-          current_step_ = 0;
+          Reset();
         }
       }
       ExecuteAction(sequence_[current_index_].action);
@@ -97,58 +82,37 @@ class ActionSequencer : public Sequencer {
       }
     }
 
-    virtual void ExecuteAction(const uint8_array& action) {}
+    virtual void ExecuteAction(const uint8_t action[ACTION_SIZE]) = 0;
 
   protected:
-    const index_t sequence_size_;
-    const Entry* sequence_;
+    const array_t<Action>& sequence_;
     const bool should_loop_;
 
-    index_t current_index_;
-    step_t current_step_;
+    uint8_t current_index_;
+    uint8_t current_step_;
 };
 
 
-class AnalogOutputSequencer : public ActionSequencer {
+class AnalogOutputSequencer : public ActionSequencer<1> {
   public:
-    AnalogOutputSequencer(const uint8_array& output_pins, index_t sequence_size, const Entry* sequence, bool should_loop)
-      : ActionSequencer(sequence_size, sequence, should_loop),
+    AnalogOutputSequencer(const uint8_array_t& output_pins,
+                          const array_t<Action>& sequence,
+                          const size_t start_index = 0,
+                          const bool should_loop = true)
+      : ActionSequencer(sequence, should_loop),
         output_pins_(output_pins) {
     }
 
-    virtual void ExecuteAction(const uint8_array& action) {
-      for (unsigned i = 0; i < output_pins_.size(); ++i) {
+    void ExecuteAction(const uint8_t action[1]) override {
+      for (size_t i = 0; i < output_pins_.size(); ++i) {
         const int pin = int(output_pins_[i]);
-        Serial.println(action[0]);
-        analogWrite(pin, action[0] / 2);
+        analogWrite(pin, action[0]);
       }
     }
 
   private:
-    const uint8_array output_pins_;
+    const uint8_array_t& output_pins_;
 };
-
-
-// class NeoPixelBounceSequencer : public Sequencer {
-//   public:
-//     NeoPixelBounceSequencer(Adafruit_NeoPixel& strip, const uint8_array& mask, const uint8_array& color_sequence)
-//        strip_(strip), mask(mask_), color_sequence_(color_sequence), position_(0), current_color_(0) {}
-//
-//     void NextStep() {
-//       if (position_ > 0) {
-//
-//       }
-//     }
-//
-//   private:
-//     Adafruit_NeoPixel& strip_;
-//     const uint8_array& mask_;
-//     const uint8_array& color_sequence_;
-//     size_t position_;
-//     size_t current_color_;
-//
-// };
-
 
 }  // namespace asq
 
